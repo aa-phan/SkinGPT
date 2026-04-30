@@ -42,7 +42,7 @@ st.markdown("---")
 
 # Load model once
 model = load_model()
-classes = ['Acne', 'Eyebags', 'Hyperpigmentation', 'Wrinkles', 'Dryness']
+classes = ['Acne', 'Blackheads', 'Dark Spots', 'Pores', 'Wrinkles']  # Class order must match training labels
 
 # Budget selector moved above the uploader so users can set it before analysis
 price_tier = st.selectbox("Select Your Budget", ["Budget", "Mid-Range", "Premium", "Luxury"])
@@ -60,17 +60,21 @@ if uploaded_file:
             
             # B. Feed the Model
             with torch.no_grad():
-                output_vector = model(input_tensor)[0].tolist()
+                logits = model(input_tensor)[0]
+                output_vector = logits.tolist()
+                display_scores = torch.sigmoid(logits).mul(100).tolist()
             
             # C. Output Vector Results
             st.markdown("---")
             st.subheader("Skin Condition Scores")
+            st.caption("Displayed scores are normalized for readability.")
             
             # Display scores in columns for cleaner presentation
             cols = st.columns(len(classes))
-            for col, condition, score in zip(cols, classes, output_vector):
+            for col, condition, score in zip(cols, classes, display_scores):
                 with col:
-                    st.metric(condition, f"{score:.2f}")
+                    st.metric(condition, f"{score:.1f}%")
+                    st.progress(int(round(max(0.0, min(100.0, score)))))
             
             # D. PRODUCT MATCHING ALGORITHM
             st.markdown("---")
