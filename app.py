@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 from torchvision import models, transforms
 from PIL import Image
+from pathlib import Path
+from product_db.match_engine import SkincareMatchingEngine
 
 # 1. ARCHITECTURE DEFINITION
 def get_resnet18_model():
@@ -62,3 +64,45 @@ if uploaded_file:
             
             # Visualizing the vector for the team
             st.bar_chart(dict(zip(classes, output_vector)))
+            
+            # D. PRODUCT MATCHING ALGORITHM
+            st.subheader("Personalized Skincare Recommendations")
+            
+            # Append 0 for eyebags (not detected by model)
+            user_vector = output_vector + [0]
+            
+            # Check if product database exists
+            db_path = Path("dataset/final_sephora_database.csv")
+            if not db_path.exists():
+                st.error(f"❌ Product database not found at {db_path}. Please ensure the CSV is present or upload it.")
+            else:
+                try:
+                    # Initialize the matching engine
+                    engine = SkincareMatchingEngine(str(db_path))
+                    
+                    # Get price tier from user
+                    price_tier = st.selectbox("Select Your Budget", ["Budget", "Mid-Range", "Premium", "Luxury"])
+                    
+                    # Run the matching algorithm
+                    routine = engine.build_routine(user_vector, price_tier)
+                    
+                    # Display Results
+                    if isinstance(routine, str):
+                        # Error message returned by the engine
+                        st.warning(routine)
+                    else:
+                        st.success("✅ Routine generated successfully!")
+                        for step, product in routine.items():
+                            with st.expander(f"🟩 {step}"):
+                                if isinstance(product, dict):
+                                    st.metric("Product Name", product.get('product_name', 'Unknown'))
+                                    col1, col2, col3 = st.columns(3)
+                                    col1.metric("Brand", product.get('brand_name', 'Unknown'))
+                                    col2.metric("Price", f"${product.get('price_usd', 0.0):.2f}")
+                                    col3.metric("Rating", f"{product.get('rating', 0.0):.1f}/5.0")
+                                    st.metric("Match Score", f"{product.get('match_percent', 0.0):.1f}%")
+                                    st.write(f"**Active Ingredients:** {', '.join(product.get('clean_ingredient_array', [])[:5])}")
+                                else:
+                                    st.write(product)
+                except Exception as e:
+                    st.error(f"❌ Error running matching algorithm: {e}")
